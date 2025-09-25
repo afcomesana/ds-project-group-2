@@ -120,12 +120,15 @@ flow_at_coordinate = function(ncdf, x, y, direction, profile=FALSE){
 }
 
 # Present flow and time axis check
-flow1 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596550, direction = "y")
+# flow1 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596550, direction = "y")
+
 # Profile option check
-flow2 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596550, direction = "y", profile = TRUE)
-# No present interface check
-flow3 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596550, direction = "x")
+# flow2 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596550, direction = "y", profile = TRUE)
+
+# No present interface error check
+# flow3 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596550, direction = "x")
+
 # No time axis in file check
-flow4 = flow_at_coordinate(ncdf = "malaren_3d_20020501.nc", x = 658350, y = 6596550, direction = "y")
+# flow4 = flow_at_coordinate(ncdf = "malaren_3d_20020501.nc", x = 658350, y = 6596550, direction = "y")
 
 
