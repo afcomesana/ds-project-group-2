@@ -8,24 +8,27 @@ library("ncdf4")
 #'   Options for direction of flow ('direction' = "x" or "y" direction)
 #'
 #' @param ncdf  character; name of the output nc file
-#' @param x,y numeric; x and y coordinates. NOTE: xu/xv yu/yv coordinates for the interface of interest and not xt yt coordinates for the cell
+#' @param x,y numeric; xt and yt coordinates for the cell
 #' @param direction character; Direction of the flow
+#' @param profile logical; if TRUE, return profile of flow through depth segments, if FALSE, sum all flow over cells
 #' @examples
 #'  \dontrun{
 #'  flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc",
 #'                     x = 658350, 
-#'                     y =  6596400,
-#'                     direction = "y",)
+#'                     y = 6596550,
+#'                     direction = "x",
+#'                     profile = FALSE)
 #'  }
 #' @import ncdf4
 #' @export
 #' 
-flow_at_coordinate = function(ncdf, x, y, direction){
+flow_at_coordinate = function(ncdf, x, y, direction, profile=FALSE){
   # Input check
   if((!is.character(ncdf)) |
      (!is.numeric(x)) |
      (!is.numeric(y)) |
-     (!is.character(direction))){
+     (!is.character(direction)) |
+     (!is.logical(profile))){
     stop("Some argument types are wrong!")
   }
   # Extra check for viable directions
@@ -41,55 +44,74 @@ flow_at_coordinate = function(ncdf, x, y, direction){
     nc_close(nc)
   })
   
-  # Fetch model coordinates for all interfaces in the chosen direction
-  # (If y-direction then v interfaces, else u interfaces)
-  type_x = ifelse(direction == "y", "xv", "xu")
-  type_y = ifelse(direction == "y", "yv", "yu")
-  model_interface_coords_x = ncvar_get(nc, type_x)[,1]
-  model_interface_coords_y = ncvar_get(nc, type_y)[1,]
+  # Fetch model coordinates for all cells
+  model_cell_coords_x = ncvar_get(nc, "xt")[,1]
+  model_cell_coords_y = ncvar_get(nc, "yt")[1,]
   
-  # Get the corresponding indices for our interface coordinates
-  x_index <- match(x, model_interface_coords_x)
-  y_index <- match(y, model_interface_coords_y)
-  
-  # Check if coordinates are valid
-  if(is.na(x_index)){
-    stop("x-coordinate + direction doesn't match any interface in model.")
-  }
-  if(is.na(y_index)){
-    stop("y-coordinate + direction doesn't match any interface in model.")
-  }
+  # Get the closest index match for our coordinates
+  # (Note that the interfaces will have the same indices as the cell)
+  x_index <- which.min(abs(model_cell_coords_x - x))
+  y_index <- which.min(abs(model_cell_coords_y - y))
   
   # Choose flow variable according to direction
   flow_var = ifelse(direction == "y", "vk", "uk")
   
-  # Fetch flow attribute at current interface (will have dimension layers x time)
+  # Fetch flow attribute and check if time dimension is present
+  # If not, add an empty time axis
+  added_dimension = FALSE
   flow = ncvar_get(nc, flow_var)
+  if(length(dim(flow)) == 3L){
+    dim(flow) = c(dim(flow), 1)
+    added_dimension = TRUE
+  }
+  
+  # Slice at x-, y- indices to get flow at point over depth and time 
   flow_point <- flow[x_index, y_index, ,]
   
-  # Fetch layer heights at same point (indices are the same as for interface v, even if coordinates are not)
-  # Also of dimension layers x time
+  # Check if interfaces exist at given coordinates
+  if(any(is.na(flow_point))){
+    stop("NA detected in flow. Check if x-, y-coordinates matches cell with existing interface in chosen direction")
+  }
+    
+  
+  # Fetch layer heights at same point (indices are the same as for cell)
   hnt = ncvar_get(nc, "hnt")
+  # Dimension check
+  if(length(dim(hnt)) == 3L){
+    dim(hnt) = c(dim(hnt), 1)
+    added_dimension = TRUE
+  }
+  # Slice to get depth at coordinates
   hnt_point <- hnt[x_index, y_index, ,]
   
-  # Fetch interface end points (same as coordinates for interfaces in the other direction)
-  # and calculate the width as difference between current and previous end point
+  # Get width of interface as spacing between cells in the other direction
+  # (This assumes that all cells in the model are of equal dimensions)
   width <- 0
   if(direction == "y"){
-    interface_end_points <- ncvar_get(nc, "xu")[,1]
-    width <- interface_end_points[x_index] - interface_end_points[x_index-1]
+    width <- model_cell_coords_x[2] - model_cell_coords_x[1]
   }
   else{
-    interface_end_points <- ncvar_get(nc, "yv")[1,]
     # negative as order of y coordinates are reversed in this model
-    width <- -(interface_end_points[y_index] - interface_end_points[y_index-1])
+    width <- -(model_cell_coords_y[2] - model_cell_coords_y[1])
   }
   
-  # Multiply flow with height element-wise, sum along the layer axis, and multiply with width to get total flow at each time step
-  flow <- apply(flow_point*hnt_point, 2, sum) * width
+  if(!profile){
+    # Multiply flow with height element-wise, sum along the layer axis, and multiply with width to get total flow at each time step
+    if(!added_dimension){ 
+      flow <- apply(flow_point*hnt_point, 2, sum) * width
+    }
+    # If no time axis present, need to use sum insted of apply
+    else{
+      flow <- sum(flow_point*hnt_point)* width
+    }
+  }
+  else{
+    # Don't sum but keep flow at each segment
+    flow = flow_point*hnt_point* width
+  }
   
   # Negate if direction is y, as reversed in this model
-  sign_y = ifelse(all(diff(model_interface_coords_y) > 0), 1, -1)
+  sign_y = ifelse(all(diff(model_cell_coords_y) > 0), 1, -1)
   if(direction == "y"){
     flow <- sign_y * flow
   }
@@ -97,8 +119,16 @@ flow_at_coordinate = function(ncdf, x, y, direction){
   return(flow)
 }
 
-flow1 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596400, direction = "y")
+# Present flow and time axis check
+# flow1 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596550, direction = "y")
 
-flow2 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 640200, y = 6591750, direction = "x")
+# Profile option check
+# flow2 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596550, direction = "y", profile = TRUE)
+
+# No present interface error check
+# flow3 = flow_at_coordinate(ncdf = "malaren_3d_20190801_multi_t.nc", x = 658350, y = 6596550, direction = "x")
+
+# No time axis in file check
+# flow4 = flow_at_coordinate(ncdf = "malaren_3d_20020501.nc", x = 658350, y = 6596550, direction = "y")
 
 
