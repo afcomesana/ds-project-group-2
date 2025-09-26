@@ -8,7 +8,7 @@ library(ncdf4)
 #'   (summed over all depth layers) at a certain coordinate at each timestep.
 #'
 #' @param filepath  character; path to the nc file
-#' @param target named list(x =, y =) coordinates. Selected cell will be that one
+#' @param target named list(x =c(...), y =c(...)) coordinates. Selected cell will be that one
 #' whose center coordinates are closest to the ones provided in this parameter.
 #' 
 #' TODO: INCLUDE PROFILE PARAMETER
@@ -21,29 +21,36 @@ library(ncdf4)
 #' @export
 #' 
 
+
+# TODO: avoid opening the nc file in every iteration to speed up computation
 flux_interface <- function(filepath, target) {
+  
+  if (!is.character(filepath)) {
+    stop("Filepath argument must be of type character.")
+  }
+  
+  if (!setequal(names(target), list('x', 'y'))
+    | !all(sapply(target, is.numeric))) {
+    stop("Target argument must be a named list with names 'x' and 'y', and its values numeric vectors or numbers.")
+  }
+  
+  if (length(target$x) != length(target$y)) {
+    stop("x and y coordinates must have the same length.")
+  }
   
   # If the input is more than one point, call function with single points and sum
   if (length(target$x) > 1) {
-    print("More than one point to compute")
     
-    return(sapply(
-      Map(list, target$x, target$y),
-      function (coord) flux_interface(filepath, target=list(x=unlist(coord[1]), y=unlist(coord[2])))
-    ))
+    discharge_x = 0
+    discharge_y = 0
     
-    # for(coord in Map(list, target$x, target$y)) {
-    #   
-    #   sub_target = list(x = coord[1], y=coord[2])
-    #   sub_target
-    # }
-  }
-  
-  # Check filepath
-  if(!is.character(filepath)
-     | !setequal(names(target), list('x', 'y'))
-     | !all(sapply(target, is.numeric))) {
-    stop("Some argument types are wrong!")
+    for(coord in 1:length(target$x)) {
+      discharge = flux_interface(filepath, target=list(x=unlist(target$x[coord]), y=unlist(target$y[coord])))
+      discharge_x = discharge_x + discharge$x
+      discharge_y = discharge_y + discharge$y
+    }
+    
+    return(list(x=discharge_x, y=discharge_y))
   }
 
   nc_data = nc_open(filepath)
@@ -61,22 +68,13 @@ flux_interface <- function(filepath, target) {
     stop("Provided file does not include the required variables 'uk' and 'vk'")
   }
   
-  
-  
-  # TODO: Check coordinates are valid, when does this can happen?
-  #if(is.na(x_index)){
-  # stop("x-coordinate + direction doesn't match any interface in model.")
-  #}
-  #if(is.na(y_index)){
-  #  stop("y-coordinate + direction doesn't match any interface in model.")
-  #}
-  
   # Get index, width and sign for x
   x_coord = ncvar_get(nc_data, varid='xt')[,1]
   x_width = abs(x_coord[1] - x_coord[2])
   x_sign  = ifelse(x_coord[2] > x_coord[1], 1, -1)
   x_diffs = abs(x_coord - target$x)
   x_index = which(min(x_diffs) == x_diffs)
+
   
   # Get index, width and sign for y
   y_coord = ncvar_get(nc_data, varid='yt')[1,]
@@ -84,6 +82,7 @@ flux_interface <- function(filepath, target) {
   y_sign  = ifelse(y_coord[2] > y_coord[1], 1, -1)
   y_diffs = abs(y_coord - target$y)
   y_index = which(min(y_diffs) == y_diffs)
+  
   
   # Get heights for cells
   heights = ncvar_get(nc_data, varid='hnt')
@@ -103,10 +102,9 @@ flux_interface <- function(filepath, target) {
   uk = uk[x_index, y_index, ,]
   vk = vk[x_index, y_index, ,]
   
-  if (any(is.na(uk)) | any(is.na(vk))) {
-    return(list(x=0, y=0))
-  }
-  
   # Return discharges
-  return(list(x = sum(uk*heights*y_width)*x_sign, y = sum(vk*heights*x_width)*y_sign))
+  return(list(
+    x = ifelse(any(is.na(uk)), 0, sum(uk*heights*y_width)*x_sign),
+    y = ifelse(any(is.na(vk)), 0, sum(vk*heights*x_width)*y_sign)
+  ))
 }
