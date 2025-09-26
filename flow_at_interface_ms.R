@@ -39,13 +39,14 @@ flow_at_interface <- function(ncdf, interface) {
     flows <- lapply(interface, function(coord) {
       flow_at_coordinate(file_name, coord$x, coord$y, coord$direction)
     })
-    Reduce("+", flows)  # sum flows across interface cells
+    # sum flows across interface cells
+    Reduce("+", flows)  
   }))
   
   return(total_flow)
 }
 
-# Example
+# Examples
 
 # One file, multiple cells in interface
 total_flow <- flow_at_interface(
@@ -64,3 +65,4 @@ total_flow_2 <- flow_at_interface(
     list(direction="x", x=652650, y=6591750)
   )
 )
+
