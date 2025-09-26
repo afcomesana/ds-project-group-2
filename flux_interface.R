@@ -104,7 +104,7 @@ flux_interface <- function(filepath, target) {
   
   # Return discharges
   return(list(
-    x = ifelse(any(is.na(uk)), 0, sum(uk*heights*y_width)*x_sign),
-    y = ifelse(any(is.na(vk)), 0, sum(vk*heights*x_width)*y_sign)
+    x = apply(uk*heights*y_width*x_sign, 2, function(values) ifelse(any(is.na(values)), 0, sum(values))),
+    y = apply(vk*heights*x_width*y_sign, 2, function(values) ifelse(any(is.na(values)), 0, sum(values)))
   ))
 }
