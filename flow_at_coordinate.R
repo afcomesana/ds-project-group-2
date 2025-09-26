@@ -1,5 +1,7 @@
 # Import dependencies
 library("ncdf4")
+library("data.table")
+library("pygetmtools")
 
 #' Calculate flow from a PyGETM output file (3D)
 #'
@@ -69,10 +71,9 @@ flow_at_coordinate = function(ncdf, x, y, direction, profile=FALSE){
   flow_point <- flow[x_index, y_index, ,]
   
   # Check if interfaces exist at given coordinates
-  if(any(is.na(flow_point))){
+  if(all(is.na(flow_point))){
     stop("NA detected in flow. Check if x-, y-coordinates matches cell with existing interface in chosen direction")
   }
-    
   
   # Fetch layer heights at same point (indices are the same as for cell)
   hnt = ncvar_get(nc, "hnt")
@@ -89,8 +90,7 @@ flow_at_coordinate = function(ncdf, x, y, direction, profile=FALSE){
   width <- 0
   if(direction == "y"){
     width <- model_cell_coords_x[2] - model_cell_coords_x[1]
-  }
-  else{
+  }else{
     # negative as order of y coordinates are reversed in this model
     width <- -(model_cell_coords_y[2] - model_cell_coords_y[1])
   }
@@ -115,8 +115,14 @@ flow_at_coordinate = function(ncdf, x, y, direction, profile=FALSE){
   if(direction == "y"){
     flow <- sign_y * flow
   }
+  
+  # Add date and return data.table
+  time_vals = ncvar_get(nc, "time")
+  time_att = ncatt_get(nc, "time")
+  dates = convert_nc_time(time_vals, time_att)
 
-  return(flow)
+  return(data.table(date = dates,
+                    flow = flow))
 }
 
 # Present flow and time axis check

@@ -1,5 +1,6 @@
 # Import dependencies
 library("ncdf4")
+library("data.table")
 source("flow_at_coordinate.R")
 
 #' Calculate flow from a PyGETM output file (3D)
@@ -21,10 +22,10 @@ source("flow_at_coordinate.R")
 #' 
 flow_at_interface = function(ncdf, interface){
   # Time series for all successive files
-  total_flow <- c() 
+  lst_flow_files = list()
   for (file_name in ncdf){
     # Summed flow series for all cells in interface
-    flow <- 0
+    lst_tmp = list()
     current_coord <- 1
     for( coordinate in interface){
       
@@ -37,20 +38,22 @@ flow_at_interface = function(ncdf, interface){
       
       # Input is further checked within point flow function
       # Get flow at current cell, and sum into interface total
-      flow <- flow + flow_at_coordinate(file_name, coordinate$x, coordinate$y, coordinate$direction)
+      df_at_coord = flow_at_coordinate(file_name, coordinate$x, coordinate$y, coordinate$direction)
+      lst_tmp[[length(lst_tmp) + 1]] = df_at_coord
       current_coord <- current_coord + 1
     }
-    # Concatenate flow series from current file into final time series
-    total_flow <- c(total_flow, flow)
+    df_file_flow = rbindlist(lst_tmp)
+    df_file_flow = df_file_flow[, .(flow = sum(flow)), by = date]
+    lst_flow_files[[length(lst_flow_files) + 1]] = df_file_flow
   }
   
-  return (total_flow)
+  return(rbindlist(lst_flow_files))
 }
 
-# Check, one file and interface of several cells
- total_flow <- flow_at_interface(ncdf = "malaren_3d_20190801_multi_t.nc", interface = list(c1 = list(direction = "x" , x = 652650, y = 6592050), c2 = list(direction = "x", x = 652650, y = 6591750)) )
-
-# Check, two successive files with the same interface, extracted into one time series
- total_flow_2 <- flow_at_interface(ncdf = c("malaren_3d_20020601.nc", "malaren_3d_20020701.nc"), interface = list(c1 = list(direction = "x" , x = 652650, y = 6592050), c2 = list(direction = "x", x = 652650, y = 6591750)) )
-
+# # Check, one file and interface of several cells
+#  total_flow <- flow_at_interface(ncdf = "malaren_3d_20190801_multi_t.nc", interface = list(c1 = list(direction = "x" , x = 652650, y = 6592050), c2 = list(direction = "x", x = 652650, y = 6591750)) )
+# 
+# # Check, two successive files with the same interface, extracted into one time series
+#  total_flow_2 <- flow_at_interface(ncdf = c("malaren_3d_20020601.nc", "malaren_3d_20020701.nc"), interface = list(c1 = list(direction = "x" , x = 652650, y = 6592050), c2 = list(direction = "x", x = 652650, y = 6591750)) )
+# 
 

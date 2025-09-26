@@ -103,7 +103,8 @@ flux_interface <- function(filepath, target) {
   }
   
   time_dim = ncvar_get(nc_data, 'time')
+  time_att = ncatt_get(nc_data, 'time')
   
   # Return discharges
-  return(list(t=time_dim, x = discharge_x, y = discharge_y))
+  return(list(t=convert_nc_time(time_dim, time_att), x = discharge_x, y = discharge_y))
 }
