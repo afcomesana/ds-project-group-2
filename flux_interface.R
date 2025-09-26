@@ -92,11 +92,18 @@ flux_interface <- function(filepath, target) {
     coord_uk = uk[x_index[coord], y_index[coord], ,]
     coord_vk = vk[x_index[coord], y_index[coord], ,]
     
+    if (is.null(dim(coord_heights))) {
+      coord_heights = matrix(coord_heights, ncol=1)
+      coord_uk = matrix(coord_uk, ncol=1)
+      coord_vk = matrix(coord_vk, ncol=1)
+    }
+    
     discharge_x = discharge_x + apply(coord_uk*coord_heights*y_width*x_sign, 2, function(values) ifelse(any(is.na(values)), 0, sum(values)))
     discharge_y = discharge_y + apply(coord_vk*coord_heights*x_width*y_sign, 2, function(values) ifelse(any(is.na(values)), 0, sum(values)))
   }
   
+  time_dim = ncvar_get(nc_data, 'time')
   
   # Return discharges
-  return(list(x = discharge_x, y = discharge_y))
+  return(list(t=time_dim, x = discharge_x, y = discharge_y))
 }
