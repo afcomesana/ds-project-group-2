@@ -30,7 +30,7 @@ flux_interface <- function(filepath, target) {
   }
   
   if (!setequal(names(target), list('x', 'y'))
-    | !all(sapply(target, is.numeric))) {
+      | !all(sapply(target, is.numeric))) {
     stop("Target argument must be a named list with names 'x' and 'y', and its values numeric vectors or numbers.")
   }
   
@@ -38,25 +38,11 @@ flux_interface <- function(filepath, target) {
     stop("x and y coordinates must have the same length.")
   }
   
-  # If the input is more than one point, call function with single points and sum
-  if (length(target$x) > 1) {
-    
-    discharge_x = 0
-    discharge_y = 0
-    
-    for(coord in 1:length(target$x)) {
-      discharge = flux_interface(filepath, target=list(x=unlist(target$x[coord]), y=unlist(target$y[coord])))
-      discharge_x = discharge_x + discharge$x
-      discharge_y = discharge_y + discharge$y
-    }
-    
-    return(list(x=discharge_x, y=discharge_y))
-  }
-
   nc_data = nc_open(filepath)
   
   # Ensure file gets closed when function ends
   on.exit({ nc_close(nc_data)})
+  
   
   # Check dimensions are present:
   if(!all(c('xt', 'yt') %in% names(nc_data$dim))){
@@ -68,21 +54,19 @@ flux_interface <- function(filepath, target) {
     stop("Provided file does not include the required variables 'uk' and 'vk'")
   }
   
-  # Get index, width and sign for x
+  # Get width and sign for x
   x_coord = ncvar_get(nc_data, varid='xt')[,1]
   x_width = abs(x_coord[1] - x_coord[2])
   x_sign  = ifelse(x_coord[2] > x_coord[1], 1, -1)
-  x_diffs = abs(x_coord - target$x)
-  x_index = which(min(x_diffs) == x_diffs)
-
   
-  # Get index, width and sign for y
+  # Get width and sign for y
   y_coord = ncvar_get(nc_data, varid='yt')[1,]
   y_width = abs(y_coord[1] - y_coord[2])
   y_sign  = ifelse(y_coord[2] > y_coord[1], 1, -1)
-  y_diffs = abs(y_coord - target$y)
-  y_index = which(min(y_diffs) == y_diffs)
   
+  # Get indexes
+  x_index = sapply(target$x, function(x) which.min(abs(x_coord - x)))
+  y_index = sapply(target$y, function(y) which.min(abs(y_coord - y)))
   
   # Get heights for cells
   heights = ncvar_get(nc_data, varid='hnt')
@@ -98,13 +82,21 @@ flux_interface <- function(filepath, target) {
     dim(vk) = c(dim(vk), 1)
   }
   
-  heights = heights[x_index, y_index, ,]
-  uk = uk[x_index, y_index, ,]
-  vk = vk[x_index, y_index, ,]
+  time_dim = dim(heights)[4]
+  
+  discharge_x = rep(0, time_dim)
+  discharge_y = rep(0, time_dim)
+  
+  for(coord in 1:length(x_index)) {
+    coord_heights = heights[x_index[coord], y_index[coord], ,]
+    coord_uk = uk[x_index[coord], y_index[coord], ,]
+    coord_vk = vk[x_index[coord], y_index[coord], ,]
+    
+    discharge_x = discharge_x + apply(coord_uk*coord_heights*y_width*x_sign, 2, function(values) ifelse(any(is.na(values)), 0, sum(values)))
+    discharge_y = discharge_y + apply(coord_vk*coord_heights*x_width*y_sign, 2, function(values) ifelse(any(is.na(values)), 0, sum(values)))
+  }
+  
   
   # Return discharges
-  return(list(
-    x = apply(uk*heights*y_width*x_sign, 2, function(values) ifelse(any(is.na(values)), 0, sum(values))),
-    y = apply(vk*heights*x_width*y_sign, 2, function(values) ifelse(any(is.na(values)), 0, sum(values)))
-  ))
+  return(list(x = discharge_x, y = discharge_y))
 }
