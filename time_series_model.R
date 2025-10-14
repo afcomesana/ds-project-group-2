@@ -5,7 +5,7 @@ A1 <- read.csv("Discharge/discharge_A1.csv")
 A2 <- read.csv("Discharge/discharge_A2.csv")
 
 # IMPORTANT: Check on map and translate direction of flow relative to the basin of interest
-# In this case, negative flow in the x-direction (i.e. south) corresponds to positive flow into the basin A
+# In this case, negative flow in the y-direction (i.e. south) from our A1 file corresponds to positive flow into the basin A
 A1 <- -A1$flow
 A2 <- A2$flow
 
