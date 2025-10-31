@@ -63,8 +63,9 @@ river_average = function(file_path, output_path){
     )
     sum <- 0
     i <- 1
-    # Start at 2016 to match discharge files
-    next_rows <- which(df$Year == "2016" & seq_len(nrow(df)) > i)
+    
+    # Start at 2000 to match discharge files
+    next_rows <- which(df$Year == "2000" & seq_len(nrow(df)) > i)
     # Check that we are not at end of file
     if (length(next_rows) > 0) {
       i = next_rows[1]
@@ -73,29 +74,39 @@ river_average = function(file_path, output_path){
       print(paste("Empty file at", file_name))
     }
     
-    # Average over 7-days interval within months
-    while(i < dim(df)[1]){
+    # End at 2024-10-31 to match discharge
+    end <- dim(df)[1]
+    end_row <- which(df$date == as.Date("2024-10-31") & seq_len(nrow(df)) > i)
+    # Check that end date exists
+    if (length(end_row) > 0) {
+      end <- end_row[1]
+    }
+    else{
+      print(paste("File ends before 2024-10-31: ", file_name))
+    }
+    
+    # First entry slightly different, discharges start at 2000-01-06
+    i <- i-2
+    # Day within week counter
+    j <- 1
+    
+    # Average over 7-days interval
+    while(i <= end){
       sum <- sum + df$flow[i]
       
-      #If we're at end of a "week", append average to weekly average
-      if ( (as.numeric(df$Day[i]) %% 7) == 0){
+      #If we're at end of a week, append average to weekly average
+      if ( j == 7){
         date <- paste(df$Year[i+1], df$Month[i+1], df$Day[i+1], sep = "-")
         weekly_average[nrow(weekly_average) + 1,] <- c(date, sum/7)
+        # Reset sum and week counter
         sum <- 0
+        j <- 1
       }
-      
-      # If we're at day 28, jump to next month
-      if(df$Day[i] == "28"){
-        next_rows <- which(df$Day == "01" & seq_len(nrow(df)) > i)
-        # Check that we are not at end of file
-        if (length(next_rows) > 0) {
-          i = next_rows[1]
-        } else{
-          break
-        }
-      } else{
-        i <- i+1
+      # Else, continue summing next loop
+      else{
+        j <- j + 1
       }
+      i <- i+1
     }
     # Convert flow to numeric and write to output
     weekly_average$flow <- as.numeric(weekly_average$flow)
@@ -107,6 +118,6 @@ river_average = function(file_path, output_path){
 }
 
 # Test run
-#river_average("./Rivers/", "./Rivers_csv/")
+river_average("./Rivers/", "./Rivers_csv/")
 
 
