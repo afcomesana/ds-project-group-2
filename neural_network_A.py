@@ -66,7 +66,7 @@ loss_function = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0001)
  
 # Epoch and batches
-n_epochs = 200   
+n_epochs = 300   
 batch_size = 10  
 batch_start = torch.arange(0, len(X_train), batch_size)
  
