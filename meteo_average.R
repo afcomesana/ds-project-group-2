@@ -1,6 +1,7 @@
 # Import dependencies
 library("ncdf4")
 library("pygetmtools")
+library(sf)
 
 #' Preprocess metereological data from PyGETM output file (3D) into weekly averaged time series.
 #'
@@ -24,12 +25,12 @@ library("pygetmtools")
 #' @import ncdf4
 #' @export
 
-meteo_average = function(dir_path, latitude, longitude, output_path, output_name){
+meteo_average = function(dir_path, x_coord, y_coord, output_path, output_name){
   
   # Input check
   if((!is.character(dir_path))
-     |!is.numeric(latitude)
-     |!is.numeric(longitude)){
+     |!is.numeric(x_coord)
+     |!is.numeric(y_coord)){
     stop("Some argument types are wrong!")
   }
   
@@ -39,13 +40,19 @@ meteo_average = function(dir_path, latitude, longitude, output_path, output_name
     stop("Empty or non-existing file_path")
   }
   
+  # Convert to latitude and longitude:
+  conv <- sweref_to_latlon(x_coord,y_coord)
+  latitude <- conv[1]
+  longitude <- conv[2]
+  
   wind_speeds = c()
   wind_dirs = c()
   precips = c()
+  temps = c()
   dates = c()
   
-  df_wind <- data.frame(matrix(ncol = 3, nrow = 0))
-  colnames(df_wind) <- c('date', 'wind_speed', 'wind_dir')
+  df_wind_temp <- data.frame(matrix(ncol = 5, nrow = 0))
+  colnames(df_wind_temp) <- c('date', 'wind_speed', 'wind_dir', 'temp', 'dew')
   
   df_prec <- data.frame(matrix(ncol = 2, nrow = 0))
   colnames(df_prec) <- c('date', 'precip')
@@ -70,20 +77,28 @@ meteo_average = function(dir_path, latitude, longitude, output_path, output_name
     time_dates <- convert_nc_time(time_vals, time_att)
     
     if( 'u10' %in% names(nc$var) ) {
+      
+      # Wind variables
       u10 = ncvar_get(nc, varid='u10')[lon_index, lat_index,]
       v10 = ncvar_get(nc, varid='v10')[lon_index, lat_index,]
       
       wind_speed = vect_to_speed(u10, v10)
       wind_dir = vect_to_dir(u10, v10)
       
-      df_temp <- data.frame(time_dates, wind_speed, wind_dir)
-      colnames(df_temp) <- c('date', 'wind_speed', 'wind_dir')
-      df_wind <- rbind(df_wind, df_temp)
+      # Temperature variables
+      t2m = ncvar_get(nc, varid='t2m')[lon_index, lat_index,]
+      d2m = ncvar_get(nc, varid='d2m')[lon_index, lat_index,]
+      
+      # Append data
+      df_tmp <- data.frame(time_dates, wind_speed, wind_dir, t2m, d2m)
+      colnames(df_tmp) <- c('date', 'wind_speed', 'wind_dir', 'temp', 'dew')
+      df_wind_temp <- rbind(df_wind_temp, df_tmp)
+      
     } else if ( 'tp' %in% names(nc$var) ) {
       
-      df_temp <- data.frame(time_dates, ncvar_get(nc, varid='tp')[lon_index, lat_index,])
-      colnames(df_temp) <- c('date', 'precip')
-      df_prec <- rbind(df_prec, df_temp)
+      df_tmp <- data.frame(time_dates, ncvar_get(nc, varid='tp')[lon_index, lat_index,])
+      colnames(df_tmp) <- c('date', 'precip')
+      df_prec <- rbind(df_prec, df_tmp)
     } else {
       stop("File does not contain any variable of interest.")
     }
@@ -91,7 +106,7 @@ meteo_average = function(dir_path, latitude, longitude, output_path, output_name
   }
   
   # Merge into one dataframe
-  df <- cbind(df_wind, df_prec[2])
+  df <- cbind(df_wind_temp, df_prec[2])
   
   # Extract day/month/year for easier loop
   df$Day <- format(as.Date(df$date, format="%Y-m%-d%"),"%d")
@@ -107,11 +122,15 @@ meteo_average = function(dir_path, latitude, longitude, output_path, output_name
     Day = character(),
     wind_speed = numeric(),
     wind_dir = numeric(),
+    temp = numeric(),
+    dew = numeric(),
     precip = numeric()
   )
   
   sum_wind_speed <- 0
   sum_wind_dir <- 0
+  sum_temp <- 0
+  sum_dew <- 0
   sum_precip <- 0
   
   i <- 1
@@ -122,6 +141,8 @@ meteo_average = function(dir_path, latitude, longitude, output_path, output_name
   while(i < dim(df)[1]) {
     sum_wind_speed <- sum_wind_speed + df$wind_speed[i]
     sum_wind_dir <- sum_wind_dir + df$wind_dir[i]
+    sum_temp <- sum_temp + df$temp[i]
+    sum_dew <- sum_dew + df$dew[i]
     sum_precip <-  sum_precip + df$precip[i]
     
     i <- i + 1
@@ -130,9 +151,21 @@ meteo_average = function(dir_path, latitude, longitude, output_path, output_name
     current_day = as.numeric(df$Day[i])
     
     if (current_day != day) {
-      daily_average[nrow(daily_average) + 1,] <- list(df$Year[i-1], df$Month[i-1], df$Day[i-1], sum_wind_speed/count, sum_wind_dir/count, sum_precip/count)
+      daily_average[nrow(daily_average) + 1,] <- list(
+                                                    df$Year[i-1],
+                                                    df$Month[i-1],
+                                                    df$Day[i-1],
+                                                    sum_wind_speed/count,
+                                                    sum_wind_dir/count,
+                                                    sum_temp/count,
+                                                    sum_dew/count,
+                                                    sum_precip/count
+                                                  )
+      
       sum_wind_speed <- 0
       sum_wind_dir <- 0
+      sum_temp <- 0
+      sum_dew <- 0
       sum_precip <- 0
       
       count <- 0
@@ -149,12 +182,16 @@ meteo_average = function(dir_path, latitude, longitude, output_path, output_name
     date = as.POSIXct(character()),
     wind_speed = numeric(),
     wind_dir = numeric(),
+    temp = numeric(),
+    dew = numeric(),
     precip = numeric()
   )
   
   
   sum_wind_speed <- 0
   sum_wind_dir <- 0
+  sum_temp <- 0
+  sum_dew <- 0
   sum_precip <- 0
   
   # Start
@@ -178,15 +215,19 @@ meteo_average = function(dir_path, latitude, longitude, output_path, output_name
   while(i < end){
     sum_wind_speed <- sum_wind_speed + daily_average$wind_speed[i]
     sum_wind_dir <- sum_wind_dir + daily_average$wind_dir[i]
+    sum_temp <- sum_temp + daily_average$temp[i]
+    sum_dew <- sum_dew + daily_average$dew[i]
     sum_precip <- sum_precip + daily_average$precip[i]
     
     #If we're at end of a week, append average to weekly average
     if ( j == 7){
       date <- paste(daily_average$Year[i+1], daily_average$Month[i+1], daily_average$Day[i+1], sep = "-")
-      weekly_average[nrow(weekly_average) + 1,] <- c(date, sum_wind_speed/7, sum_wind_dir/7, sum_precip/7)
+      weekly_average[nrow(weekly_average) + 1,] <- c(date, sum_wind_speed/7, sum_wind_dir/7, sum_temp/7, sum_dew/7, sum_precip/7)
       # Reset sum and week counter
       sum_wind_speed <- 0
       sum_wind_dir <- 0
+      sum_temp <- 0
+      sum_dew <- 0
       sum_precip <- 0
       j <- 1
     }
@@ -200,6 +241,8 @@ meteo_average = function(dir_path, latitude, longitude, output_path, output_name
   # Convert wind speed and direction to numeric and write to output
   weekly_average$wind_speed <- as.numeric(weekly_average$wind_speed)
   weekly_average$wind_dir <- as.numeric(weekly_average$wind_dir)
+  weekly_average$temp <- as.numeric(weekly_average$temp)
+  weekly_average$dew <- as.numeric(weekly_average$dew)
   weekly_average$precip <- as.numeric(weekly_average$precip)
   
   write.csv(weekly_average, file = paste(output_path, output_name, ".csv", sep = ""), row.names = FALSE)
@@ -229,11 +272,7 @@ wind_to_vectors = function(speed, direction){
   return(wsvectors)
 }
 
-
-# Test #
-
 # Get lat/long
-library(sf)
 sweref_to_latlon = function(x, y){
   loc_sweref = st_sfc(st_point(x = c(x, y)), crs = st_crs(3006))
   loc = st_transform(loc_sweref, crs = st_crs(4326))
@@ -241,8 +280,5 @@ sweref_to_latlon = function(x, y){
   c(loc[[1]][2], loc[[1]][1])
 }
 
-sweref_to_latlon(658350,6595950)
 
-# Test run
-meteo_average("./Meteo/",  59.47209, 17.79508, "./Meteo_csv/", "A1_meteo") 
 
