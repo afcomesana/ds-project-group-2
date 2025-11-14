@@ -25,7 +25,7 @@ library(sf)
 #' @import ncdf4
 #' @export
 
-meteo_average = function(dir_path, x_coord, y_coord, output_path, output_name){
+meteo_average = function(dir_path, x_coord, y_coord, output_path, output_name, daily = FALSE){
   
   # Input check
   if((!is.character(dir_path))
@@ -171,6 +171,15 @@ meteo_average = function(dir_path, x_coord, y_coord, output_path, output_name){
       count <- 0
       day = current_day
     }
+  }
+  
+  if (daily) {
+    daily_average['date'] <- apply(daily_average[, c("Year", "Month", "Day")], 1, function(item) paste0(item[1],"-", item[2], '-', item[3]))
+    daily_average <- daily_average[, !names(daily_average) %in% c("Year", "Month", "Day")]
+    daily_average <- daily_average[, c('date', names(daily_average)[names(daily_average) != 'date'])]
+    
+    write.csv(daily_average, file = paste(output_path, output_name, ".csv", sep = ""), row.names = FALSE)
+    return()
   }
   
   # ----------------------
