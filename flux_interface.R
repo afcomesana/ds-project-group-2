@@ -1,3 +1,5 @@
+# Author: Alberto Fernández Comesaña
+
 library(pygetmtools)
 library(ncdf4)
 
