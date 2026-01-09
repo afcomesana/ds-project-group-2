@@ -1,3 +1,7 @@
+# Author: Henrik Jonasson
+# First linear regression model for A basin
+# Expanded and properly commented version found as an example in deliverable repository
+
 library(corrplot)
 library(Hmisc)
 
