@@ -1,3 +1,4 @@
+# Author: Alberto Fernández Comesaña
 source("R/meteo_average.R")
 
 # Prepare metereological data for interfaces:
