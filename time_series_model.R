@@ -1,3 +1,7 @@
+# Author: Henrik Jonasson
+# Some initiary data exploration with time series
+# Not much use in final models, except conclusion that previous lags of rivers are not significant when predicting interface flow
+
 library(stats)
 library(forecast)
 

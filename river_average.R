@@ -1,3 +1,6 @@
+# Author: Henrik Jonasson
+# Script to extract and average river inflows into csv files for model
+
 # Import dependencies
 library("ncdf4")
 library("pygetmtools")

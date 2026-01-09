@@ -1,3 +1,8 @@
+# Author: Henrik Jonasson, Moutushi Sen, Alberto Fernández Comesaña
+# Combination of all our seperate tries on the data preperation, with changes from our supervisor Jorrit Mesman to fit the larger project
+# Extracts flow at an interface
+
+
 # Import dependencies
 library("ncdf4")
 library("data.table")

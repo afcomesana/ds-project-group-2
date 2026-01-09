@@ -1,3 +1,8 @@
+# Author: Alberto Fernández Comesaña
+# Script to extract and format the meteorological data
+# Small changes by Henrik Jonasson to fit new discharge files
+# Additional changes by Alberto Fernández Comesaña to also extract temperature/dew point and option for daily averages
+
 # Import dependencies
 library("ncdf4")
 library("pygetmtools")

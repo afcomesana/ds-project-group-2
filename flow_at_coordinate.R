@@ -1,3 +1,8 @@
+# Author: Henrik Jonasson
+# Script to extract and prepare flow data from hydrodynamic model, calculated at a single cell
+# Was later used as part of the flow_at_interface.R function to get flow of a whole interface
+# Includes changes from our supervisor Jorrit Mesman to fit the larger project
+
 # Import dependencies
 library("ncdf4")
 library("data.table")
